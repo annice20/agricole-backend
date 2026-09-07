@@ -30,6 +30,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
     private final JwtUtil jwtUtil;
+    private final ResendMailService resendMailService;
 
     @Autowired
     public AuthService(
@@ -37,13 +38,15 @@ public class AuthService {
             AgriculteurRepository agriculteurRepository,
             PasswordEncoder passwordEncoder,
             JavaMailSender mailSender,
-            JwtUtil jwtUtil
+            JwtUtil jwtUtil,
+            ResendMailService resendMailService
     ) {
         this.utilisateurRepository = utilisateurRepository;
         this.agriculteurRepository = agriculteurRepository;
         this.passwordEncoder = passwordEncoder;
         this.mailSender = mailSender;
         this.jwtUtil = jwtUtil;
+        this.resendMailService = resendMailService;
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -54,7 +57,6 @@ public class AuthService {
             throw new RuntimeException("Email ou mot de passe incorrect");
         }
 
-        // Vérification si le compte utilisateur global a été banni ou désactivé par l'administrateur
         if (!utilisateur.isActif()) {
             throw new RuntimeException("Compte désactivé");
         }
@@ -66,11 +68,9 @@ public class AuthService {
                 .getNom()
                 .name();
 
-        // Gestion propre du workflow de validation de l'agriculteur
         if ("AGRICULTEUR".equals(role)) {
             Agriculteur agriculteur = agriculteurRepository.findByUtilisateur(utilisateur).orElse(null);
 
-            // Si la fiche terrain de l'agriculteur n'est pas encore activée par l'agent
             if (agriculteur != null && !agriculteur.isActif()) {
                 return new AuthResponse(
                     "Votre inscription est réussie, mais votre compte est en attente d'activation par un Agent de terrain.",
@@ -82,7 +82,6 @@ public class AuthService {
             }
         }
 
-        // Si le compte est validé par l'agent (ou si c'est un autre rôle), on passe à la double authentification
         if (utilisateur.isDoubleAuthentification()) {
             envoyerOtp(utilisateur);
             return new AuthResponse("OTP envoyé sur votre email", null, true, role);
@@ -119,15 +118,13 @@ public class AuthService {
         utilisateur.setExpirationOtp(LocalDateTime.now().plusMinutes(5));
         utilisateurRepository.save(utilisateur);
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(utilisateur.getEmail());
-        message.setSubject("Code OTP - Plateforme Agricole");
-        message.setText(
+        String sujet = "Code OTP - Plateforme Agricole";
+        String texte =
                 "Bonjour " + utilisateur.getPrenom() + ",\n\n"
                 + "Votre code OTP est : " + code + "\n\n"
-                + "Ce code est valable pendant 5 minutes."
-        );
-        mailSender.send(message);
+                + "Ce code est valable pendant 5 minutes.";
+
+        resendMailService.envoyer(utilisateur.getEmail(), sujet, texte);
     }
 
     public AuthResponse verifierOtp(OtpRequest request) {
