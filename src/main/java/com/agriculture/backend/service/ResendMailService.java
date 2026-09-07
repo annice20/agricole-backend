@@ -15,30 +15,57 @@ public class ResendMailService {
     @Value("${resend.api.key}")
     private String apiKey;
 
-    // Tant que le domaine n'est pas vérifié, on garde onboarding@resend.dev
-    // (fonctionne uniquement vers l'email de ton compte Resend)
-    private static final String FROM = "AgroPlateforme <onboarding@resend.dev>";
-    private static final String RESEND_URL = "https://api.resend.com/emails";
+    /*
+     * Adresse autorisée par Resend en mode test.
+     */
+    @Value("${resend.test.recipient:anniceflorencia@gmail.com}")
+    private String testRecipient;
+
+    private static final String FROM =
+            "AgroPlateforme <onboarding@resend.dev>";
+
+    private static final String RESEND_URL =
+            "https://api.resend.com/emails";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public void envoyer(String destinataire, String sujet, String texte) {
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
 
-        // On transforme le texte brut en HTML simple (saut de ligne -> <br>)
-        String html = texte.replace("\n", "<br>");
+        /*
+         * Resend est actuellement en mode test.
+         *
+         * Tous les emails sont donc redirigés vers
+         * l'adresse autorisée par Resend.
+         *
+         * Le destinataire original reste indiqué dans
+         * le contenu de l'email afin de savoir à quel
+         * compte correspond le code OTP.
+         */
+        String html =
+                "<p>" + texte.replace("\n", "<br>") + "</p>"
+                + "<hr>"
+                + "<p><strong>Destinataire prévu :</strong> "
+                + destinataire
+                + "</p>";
 
         Map<String, Object> body = Map.of(
-            "from", FROM,
-            "to", new String[]{ destinataire },
-            "subject", sujet,
-            "html", html
+                "from", FROM,
+                "to", new String[]{ testRecipient },
+                "subject", sujet,
+                "html", html
         );
 
-        HttpEntity<Map<String, Object>> requete = new HttpEntity<>(body, headers);
+        HttpEntity<Map<String, Object>> requete =
+                new HttpEntity<>(body, headers);
 
-        restTemplate.postForEntity(RESEND_URL, requete, String.class);
+        restTemplate.postForEntity(
+                RESEND_URL,
+                requete,
+                String.class
+        );
     }
 }
