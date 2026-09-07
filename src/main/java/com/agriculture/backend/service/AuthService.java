@@ -83,7 +83,11 @@ public class AuthService {
         }
 
         if (utilisateur.isDoubleAuthentification()) {
-            envoyerOtp(utilisateur);
+            try {
+                envoyerOtp(utilisateur);
+            } catch (Exception e) {
+                return new AuthResponse("ERREUR DEBUG: " + e.getMessage(), null, true, role);
+            }
             return new AuthResponse("OTP envoyé sur votre email", null, true, role);
         }
 
